@@ -9,12 +9,20 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
 dependencies {
     testImplementation platform('org.junit:junit-bom:5.9.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    implementation "org.apache.spark:spark-core_2.12:3.2.0"
-    implementation "org.apache.spark:spark-sql_2.12:3.2.0"
-    implementation "org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0"
+    implementation "org.apache.spark:spark-core_2.12:3.5.1"
+    implementation "org.apache.spark:spark-sql_2.12:3.5.1"
+    implementation "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.1"
+    implementation 'org.apache.commons:commons-pool2:2.11.0' // 사용하는 Commons Pool 버전에 맞게 설정
+
 }
 
 
