@@ -18,8 +18,6 @@ public class Main {
                 .master("spark://192.168.200.156:7077")
                 .getOrCreate();
 
-        JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
-
         // 카프카 브로커 서버
         String bootstrapServers = "192.168.200.156:9092";
         // 입력 토픽
@@ -39,9 +37,23 @@ public class Main {
                 .option("startingOffsets", startingOffsets) // 시작 오프셋 설정
                 .load();
 
+
+        lines.printSchema();
+
+
+        // 스트리밍으로 받아온 데이터 전처리
+        Dataset<Row> filteredLines = lines
+                .selectExpr("CAST(value AS STRING) as log")
+                .filter("log RLIKE '^\\\\d{4}.*$'");
+
+        StreamingQuery consoleQuery = filteredLines
+                .writeStream()
+                .outputMode("append")
+                .format("console")
+                .start();
+
         // 콘솔에 출력하는 예시
-        StreamingQuery query = lines
-                .selectExpr("CAST(value AS STRING)")
+        StreamingQuery query = filteredLines
                 .writeStream()
                 .outputMode("append")
                 .format("csv")
@@ -50,7 +62,7 @@ public class Main {
                 .option("checkpointLocation", checkpointLocation)  // 체크포인트 위치 설정
                 .start();
 
-
+        consoleQuery.awaitTermination();
         query.awaitTermination();
     }
 }
