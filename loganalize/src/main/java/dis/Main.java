@@ -1,12 +1,16 @@
 package dis;
 
-import org.apache.spark.api.java.JavaSparkContext;
+import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.ForeachWriter;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
+import java.util.ArrayList;
+import java.util.List;
 
+import java.util.Collections;
 import java.util.concurrent.TimeoutException;
 
 
@@ -16,6 +20,9 @@ public class Main {
                 .builder()
                 .appName("loganalize")
                 .master("spark://192.168.200.156:7077")
+                .config("spark.es.nodes", "192.168.200.156") // Elasticsearch 호스트 설정
+                .config("spark.es.port", "9200") // Elasticsearch 포트 설정
+                .config("spark.es.nodes.wan.only", "true") // WAN 환경에서만 Elasticsearch에 연결
                 .getOrCreate();
 
         // 카프카 브로커 서버
@@ -38,31 +45,29 @@ public class Main {
                 .load();
 
 
-        lines.printSchema();
-
-
         // 스트리밍으로 받아온 데이터 전처리
         Dataset<Row> filteredLines = lines
                 .selectExpr("CAST(value AS STRING) as log")
                 .filter("log RLIKE '^\\\\d{4}.*$'");
 
-        StreamingQuery consoleQuery = filteredLines
-                .writeStream()
-                .outputMode("append")
-                .format("console")
-                .start();
-
-        // 콘솔에 출력하는 예시
         StreamingQuery query = filteredLines
                 .writeStream()
                 .outputMode("append")
-                .format("csv")
-                .option("path", "./test")  // CSV 파일이 저장될 경로 지정
-                .option("failOnDataLoss", "false")
-                .option("checkpointLocation", checkpointLocation)  // 체크포인트 위치 설정
+                .foreachBatch((batchDF, batchId) -> {
+                    // 각 배치마다 Elasticsearch에 저장
+                    if (!batchDF.isEmpty()) {
+                        batchDF.write().format("org.elasticsearch.spark.sql")
+                                .option("es.nodes", "localhost")
+                                .option("es.port", "9200")
+                                .option("es.resource", "logs")
+                                .mode("append")
+                                .save();
+                    }
+                })
                 .start();
 
-        consoleQuery.awaitTermination();
+        // 스트리밍 쿼리 실행
         query.awaitTermination();
+
     }
 }
