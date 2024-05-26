@@ -1,14 +1,13 @@
 package dis;
 
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.*;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.ForeachWriter;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
+
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
-import java.util.ArrayList;
-import java.util.List;
 
 import java.util.Collections;
 import java.util.concurrent.TimeoutException;
@@ -33,7 +32,6 @@ public class Main {
         // 시작 오프셋 설정
         String startingOffsets = "latest"; // 현재 메시지부터 읽기
 
-        String checkpointLocation = "./checkpoint"; // 변경 필요
 
         // 스트리밍 처리를 위한 DataFrame 생성
         Dataset<Row> lines = spark
@@ -45,21 +43,32 @@ public class Main {
                 .load();
 
 
-        // 스트리밍으로 받아온 데이터 전처리
-        Dataset<Row> filteredLines = lines
-                .selectExpr("CAST(value AS STRING) as log")
-                .filter("log RLIKE '^\\\\d{4}.*$'");
 
-        StreamingQuery query = filteredLines
+        Dataset<Row> parsedLogs = lines
+                .selectExpr("CAST(value AS STRING) as log")
+                .filter("log RLIKE '^\\\\d{4}-\\\\d{2}-\\\\d{2}.*$'")
+                .selectExpr(
+                        "substring(log, 1, 23) as timestamp",
+                        "substring(log, 26, 4) as logLevel",
+                        "IF(regexp_extract(log, 'User ID: (.*?),', 1) = '', NULL, regexp_extract(log, 'User ID: (.*?),', 1)) as userId",
+                        "IF(regexp_extract(log, 'Client IP: (.*?),', 1) = '', NULL, regexp_extract(log, 'Client IP: (.*?),', 1)) as clientIp",
+                        "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl"
+                );
+
+
+        StreamingQuery query = parsedLogs
                 .writeStream()
                 .outputMode("append")
                 .foreachBatch((batchDF, batchId) -> {
                     // 각 배치마다 Elasticsearch에 저장
                     if (!batchDF.isEmpty()) {
+                        batchDF.show(); // 배치 데이터를 콘솔에 출력
                         batchDF.write().format("org.elasticsearch.spark.sql")
                                 .option("es.nodes", "localhost")
                                 .option("es.port", "9200")
-                                .option("es.resource", "logs")
+                                .option("es.resource", "logs_test4")
+                                .option("es.mapping.id","timestamp")
+                                .option("es.mapping.date.rich", "false")
                                 .mode("append")
                                 .save();
                     }
@@ -70,4 +79,5 @@ public class Main {
         query.awaitTermination();
 
     }
+
 }
