@@ -18,14 +18,14 @@ public class Main {
         SparkSession spark = SparkSession
                 .builder()
                 .appName("loganalize")
-                .master("spark://192.168.200.156:7077")
-                .config("spark.es.nodes", "192.168.200.156") // Elasticsearch 호스트 설정
+                .master("spark://localhost:7077")
+                .config("spark.es.nodes", "localhost") // Elasticsearch 호스트 설정
                 .config("spark.es.port", "9200") // Elasticsearch 포트 설정
                 .config("spark.es.nodes.wan.only", "true") // WAN 환경에서만 Elasticsearch에 연결
                 .getOrCreate();
 
         // 카프카 브로커 서버
-        String bootstrapServers = "192.168.200.156:9092";
+        String bootstrapServers = "localhost:9092";
         // 입력 토픽
         String topic = "spark";
 
@@ -72,6 +72,7 @@ public class Main {
                                 .option("es.nodes", "localhost")
                                 .option("es.port", "9200")
                                 .option("es.resource", "logs_valid")
+                                .option("es.index.auto.create", "true")
                                 .option("es.mapping.id","timestamp")
                                 .option("es.mapping.date.rich", "false")
                                 .mode("append")
@@ -92,6 +93,7 @@ public class Main {
                                 .option("es.nodes", "localhost")
                                 .option("es.port", "9200")
                                 .option("es.resource", "logs_invalid")
+                                .option("es.index.auto.create", "true")
                                 .mode("append")
                                 .save();
                     }
