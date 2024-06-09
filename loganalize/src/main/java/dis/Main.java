@@ -55,8 +55,13 @@ public class Main {
                         "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl"
                 );
 
+        // 유효하지 않은 로그 형식에 맞는 데이터를 필터링
+        Dataset<Row> invalidLogs = lines
+                .selectExpr("CAST(value AS STRING) as log")
+                .filter("NOT log RLIKE '^\\\\d{4}-\\\\d{2}-\\\\d{2}.*$'");
 
-        StreamingQuery query = parsedLogs
+        // 유효한 로그(외부 api 요청으로 발생하는 로그)
+        StreamingQuery validQuery = parsedLogs
                 .writeStream()
                 .outputMode("append")
                 .foreachBatch((batchDF, batchId) -> {
@@ -66,7 +71,7 @@ public class Main {
                         batchDF.write().format("org.elasticsearch.spark.sql")
                                 .option("es.nodes", "localhost")
                                 .option("es.port", "9200")
-                                .option("es.resource", "logs_test4")
+                                .option("es.resource", "logs_valid")
                                 .option("es.mapping.id","timestamp")
                                 .option("es.mapping.date.rich", "false")
                                 .mode("append")
@@ -75,8 +80,27 @@ public class Main {
                 })
                 .start();
 
+        // 유효하지 않은 로그(내부 동작으로 발생하는 로그)
+        StreamingQuery invalidQuery = invalidLogs
+                .writeStream()
+                .outputMode("append")
+                .foreachBatch((batchDF, batchId) -> {
+                    // 각 배치마다 Elasticsearch에 저장
+                    if (!batchDF.isEmpty()) {
+                        batchDF.show(); // 배치 데이터를 콘솔에 출력
+                        batchDF.write().format("org.elasticsearch.spark.sql")
+                                .option("es.nodes", "localhost")
+                                .option("es.port", "9200")
+                                .option("es.resource", "logs_invalid")
+                                .mode("append")
+                                .save();
+                    }
+                })
+                .start();
+
         // 스트리밍 쿼리 실행
-        query.awaitTermination();
+        validQuery.awaitTermination();
+        invalidQuery.awaitTermination();
 
     }
 
