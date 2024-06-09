@@ -55,7 +55,7 @@ public class Main {
                         "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl",
                         "IF(regexp_extract(log, 'Request Method: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Method: (.*?),', 1)) as requestMethod",
                         "IF(regexp_extract(log, 'Request Parameters: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Parameters: (.*?),', 1)) as requestParameters",
-                        "IF(regexp_extract(log, 'Request Body: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Body: (.*?),', 1)) as requestBody"
+                        "IF(regexp_extract(log, 'Request Body: (.*)', 1) = '', NULL, regexp_extract(log, 'Request Body: (.*)', 1)) as requestBody"
                 );
 
 
