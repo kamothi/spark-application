@@ -55,13 +55,19 @@ public class Main {
                         "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl"
                 );
 
+
+        Dataset<Row> logsWithSQLInjection = parsedLogs
+                .withColumn("isSQLInjection", detectSQLInjection(parsedLogs.col("requestUrl")));
+
         // 유효하지 않은 로그 형식에 맞는 데이터를 필터링
         Dataset<Row> invalidLogs = lines
                 .selectExpr("CAST(value AS STRING) as log")
                 .filter("NOT log RLIKE '^\\\\d{4}-\\\\d{2}-\\\\d{2}.*$'");
 
+
+
         // 유효한 로그(외부 api 요청으로 발생하는 로그)
-        StreamingQuery validQuery = parsedLogs
+        StreamingQuery validQuery = logsWithSQLInjection
                 .writeStream()
                 .outputMode("append")
                 .foreachBatch((batchDF, batchId) -> {
@@ -80,6 +86,8 @@ public class Main {
                     }
                 })
                 .start();
+
+
 
         // 유효하지 않은 로그(내부 동작으로 발생하는 로그)
         StreamingQuery invalidQuery = invalidLogs
@@ -105,5 +113,26 @@ public class Main {
         invalidQuery.awaitTermination();
 
     }
+
+    private static Column detectSQLInjection(Column col) {
+        // 사용자 입력에서 잠재적인 SQL 인젝션 문자를 판별합니다.
+        // 작은따옴표(')의 유무를 확인합니다.
+        Column containsSingleQuote = functions.regexp_extract(col, "'", 0).notEqual("");
+
+        // 세미콜론(;)의 유무를 확인합니다.
+        Column containsSemicolon = functions.regexp_extract(col, ";", 0).notEqual("");
+
+        // 주석문의 유무를 확인합니다.
+        Column containsComment = functions.regexp_extract(col, "--", 0).notEqual("");
+
+        // UNION 등의 SQL 키워드의 유무를 확인합니다.
+        Column containsSQLKeyword = functions.regexp_extract(col, "(?i)\\bUNION\\b", 0).notEqual("");
+
+        // SQL 인젝션 여부를 나타내는 열을 만듭니다.
+        Column isSQLInjection = containsSingleQuote.or(containsSemicolon).or(containsComment).or(containsSQLKeyword);
+
+        return isSQLInjection;
+    }
+
 
 }
