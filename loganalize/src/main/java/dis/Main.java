@@ -52,12 +52,16 @@ public class Main {
                         "substring(log, 26, 4) as logLevel",
                         "IF(regexp_extract(log, 'User ID: (.*?),', 1) = '', NULL, regexp_extract(log, 'User ID: (.*?),', 1)) as userId",
                         "IF(regexp_extract(log, 'Client IP: (.*?),', 1) = '', NULL, regexp_extract(log, 'Client IP: (.*?),', 1)) as clientIp",
-                        "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl"
+                        "IF(regexp_extract(log, 'Request URL: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request URL: (.*?),', 1)) as requestUrl",
+                        "IF(regexp_extract(log, 'Request Method: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Method: (.*?),', 1)) as requestMethod",
+                        "IF(regexp_extract(log, 'Request Parameters: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Parameters: (.*?),', 1)) as requestParameters",
+                        "IF(regexp_extract(log, 'Request Body: (.*?),', 1) = '', NULL, regexp_extract(log, 'Request Body: (.*?),', 1)) as requestBody"
                 );
 
 
         Dataset<Row> logsWithSQLInjection = parsedLogs
-                .withColumn("isSQLInjection", detectSQLInjection(parsedLogs.col("requestUrl")));
+                .withColumn("isSQLInjection", detectSQLInjection(parsedLogs.col("requestUrl")))
+                .withColumn("isJsonInjection",detectJsonInjection(parsedLogs.col("requestBody")));
 
         // 유효하지 않은 로그 형식에 맞는 데이터를 필터링
         Dataset<Row> invalidLogs = lines
@@ -135,4 +139,29 @@ public class Main {
     }
 
 
+    private static Column detectJsonInjection(Column col) {
+        // SQL 문법 포함 여부 확인
+        Column containsSQLKeywords = containsSQLKeywords(col);
+
+        // JSON 데이터의 특수 문자 패턴
+        String specialCharactersPattern = "[\"'`;&<>/]";
+
+        // JSON 데이터에서 특수 문자가 있는지 확인
+        Column containsSpecialCharacters = functions.regexp_extract(col, specialCharactersPattern, 0).notEqual("");
+
+        // JSON Injection 여부를 나타내는 열을 만듭니다.
+        Column isJsonInjection = containsSQLKeywords.or(containsSpecialCharacters);
+
+        return isJsonInjection;
+    }
+
+    private static Column containsSQLKeywords(Column col) {
+        // SQL 키워드 패턴
+        String sqlPattern = "(?i)(SELECT|INSERT|UPDATE|DELETE|DROP|TRUNCATE|CREATE|ALTER|GRANT|REVOKE)";
+
+        // 컬럼에서 SQL 키워드를 찾습니다.
+        Column containsSQLKeywords = functions.regexp_extract(col, sqlPattern, 0).notEqual("");
+
+        return containsSQLKeywords;
+    }
 }
