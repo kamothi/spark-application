@@ -1,15 +1,10 @@
 package dis;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.*;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
-import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
 
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 
-import java.util.Collections;
 import java.util.concurrent.TimeoutException;
 
 
